@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model RefreshTokens {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_uuid     String    @db.Uuid
+  refresh_token String
+  ip_address    String?   @db.VarChar(50)
+  user_agent    String?
+  is_revoked    Boolean?  @default(false)
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at    DateTime  @db.Timestamptz(6)
+  Users         Users     @relation(fields: [user_uuid], references: [uuid], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_uuid")
+}
+
+model Users {
+  uuid          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String          @unique @db.VarChar(255)
+  password      String          @db.VarChar(255)
+  display_name  String          @db.VarChar(50)
+  role          user_role       @default(employee)
+  branch        String?         @db.VarChar(100)
+  team          String?         @db.VarChar(100)
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  deleted_at    DateTime?       @db.Timestamptz(6)
+  RefreshTokens RefreshTokens[]
+}
+
+enum user_role {
+  admin
+  employee
+}
