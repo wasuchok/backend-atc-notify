@@ -1,6 +1,6 @@
 import "dotenv/config";
-import jwt from "jsonwebtoken";
 import { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
 
 export interface AuthenticatedRequest extends Request {
     user?: {
@@ -67,7 +67,7 @@ export const requireSelfOrAdmin = (paramKey = "id") => {
             return res.status(401).json({ message: "กรุณาเข้าสู่ระบบ" });
         }
 
-        // Admin can access any user id
+
         if (req.user.role === "admin") {
             return next();
         }
