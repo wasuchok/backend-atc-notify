@@ -111,6 +111,7 @@ export const getChannel = async (req: AuthenticatedRequest, res: Response) => {
     const startTime = Date.now();
     try {
         const userId = req.user?.uuid;
+        const userRole = (req.user?.role || "").toLowerCase();
         if (!userId) {
             const duration = Date.now() - startTime;
             return res.status(401).json({
@@ -119,11 +120,31 @@ export const getChannel = async (req: AuthenticatedRequest, res: Response) => {
             });
         }
 
+        let roleIds: string[] = [];
+        if (userRole !== "admin") {
+            const roles = await prisma.user_roles.findMany({
+                where: { user_uuid: userId },
+                select: { role_id: true },
+            });
+            roleIds = roles.map((r) => r.role_id);
+        }
+
+        const orConditions: any[] = [{ created_by: userId }];
+        if (roleIds.length > 0) {
+            orConditions.push({
+                channel_role_visibility: {
+                    some: { role_id: { in: roleIds } },
+                },
+            });
+        }
+
         const channels = await prisma.channels.findMany({
-            where: {
-                is_active: true,
-                created_by: userId
-            },
+            where: userRole === "admin"
+                ? { is_active: true }
+                : {
+                    is_active: true,
+                    OR: orConditions,
+                },
             select: {
                 id: true,
                 name: true,
