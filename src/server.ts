@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express from "express";
 import authRoutes from "./Routes/AuthRoutes";
+import channelRoutes from './Routes/ChannelRoutes';
+import roleRoutes from './Routes/RoleRoutes';
 
 const app = express()
 
@@ -10,6 +12,8 @@ app.use(cors())
 const port = 3300
 
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/channel', channelRoutes)
+app.use('/api/v1/role', roleRoutes)
 
 app.get('/', (req, res) => {
     res.send('hello world')

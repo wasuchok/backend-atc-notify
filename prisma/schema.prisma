@@ -31,6 +31,39 @@ model Users {
   updated_at    DateTime?       @default(now()) @db.Timestamptz(6)
   deleted_at    DateTime?       @db.Timestamptz(6)
   RefreshTokens RefreshTokens[]
+  channels      channels[]
+}
+
+model channels {
+  id                      Int                       @id @default(autoincrement())
+  name                    String                    @unique @db.VarChar(255)
+  icon_codepoint          Int?
+  icon_color              String?                   @db.VarChar(20)
+  is_active               Boolean                   @default(true)
+  created_by              String?                   @db.Uuid
+  created_at              DateTime                  @default(now()) @db.Timestamp(6)
+  updated_at              DateTime                  @default(now()) @db.Timestamp(6)
+  channel_role_visibility channel_role_visibility[]
+  Users                   Users?                    @relation(fields: [created_by], references: [uuid], onUpdate: NoAction, map: "fk_channels_created_by")
+}
+
+model roles {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String                    @unique @db.VarChar(100)
+  created_at              DateTime?                 @default(now()) @db.Timestamptz(6)
+  channel_role_visibility channel_role_visibility[]
+}
+
+model channel_role_visibility {
+  id         Int      @id @default(autoincrement())
+  channel_id Int
+  role_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+  channels   channels @relation(fields: [channel_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_crv_channel_id")
+  roles      roles    @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_crv_role_id")
+
+  @@unique([channel_id, role_id], map: "uq_channel_role")
 }
 
 enum user_role {
