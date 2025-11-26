@@ -107,7 +107,7 @@ export const register = async (req: Request, res: Response) => {
                 display_name,
                 role: role || "employee",
                 branch: branch ? branch.toUpperCase() : null,
-                team
+                team : team ? team.toUpperCase() : null,
             },
             select: {
                 uuid: true,

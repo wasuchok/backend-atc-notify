@@ -12,7 +12,7 @@ app.use(cors())
 
 const port = 3300
 
-app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/channel', channelRoutes)
 app.use('/api/v1/role', roleRoutes)
 app.use('/api/v1/users', userRoutes)
