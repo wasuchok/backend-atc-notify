@@ -20,19 +20,22 @@ model RefreshTokens {
 }
 
 model Users {
-  uuid          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email         String          @unique @db.VarChar(255)
-  password      String          @db.VarChar(255)
-  display_name  String          @db.VarChar(50)
-  role          user_role       @default(employee)
-  branch        String?         @db.VarChar(100)
-  team          String?         @db.VarChar(100)
-  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime?       @default(now()) @db.Timestamptz(6)
-  deleted_at    DateTime?       @db.Timestamptz(6)
-  RefreshTokens RefreshTokens[]
-  channels      channels[]
-  user_roles    user_roles[]
+  uuid                                 String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                String          @unique @db.VarChar(255)
+  password                             String          @db.VarChar(255)
+  display_name                         String          @db.VarChar(50)
+  role                                 user_role       @default(employee)
+  branch                               String?         @db.VarChar(100)
+  team                                 String?         @db.VarChar(100)
+  created_at                           DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at                           DateTime?       @default(now()) @db.Timestamptz(6)
+  deleted_at                           DateTime?       @db.Timestamptz(6)
+  RefreshTokens                        RefreshTokens[]
+  channels                             channels[]
+  message_reads                        message_reads[]
+  messages_messages_reply_toToUsers    messages[]      @relation("messages_reply_toToUsers")
+  messages_messages_sender_uuidToUsers messages[]      @relation("messages_sender_uuidToUsers")
+  user_roles                           user_roles[]
 }
 
 model channels {
@@ -46,6 +49,8 @@ model channels {
   updated_at              DateTime                  @default(now()) @db.Timestamp(6)
   channel_role_visibility channel_role_visibility[]
   Users                   Users?                    @relation(fields: [created_by], references: [uuid], onUpdate: NoAction, map: "fk_channels_created_by")
+  messages                messages[]
+  webhook_subscriptions   webhook_subscriptions[]
 }
 
 model roles {
@@ -77,6 +82,38 @@ model user_roles {
   Users      Users     @relation(fields: [user_uuid], references: [uuid], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_roles_user")
 
   @@unique([user_uuid, role_id], map: "uq_user_role")
+}
+
+model message_reads {
+  id         Int       @id
+  message_id Int?
+  read_at    DateTime? @db.Timetz(6)
+  user_uuid  String?   @db.Uuid
+  messages   messages? @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_read_message_id")
+  Users      Users?    @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_user_uuid")
+}
+
+model messages {
+  id                                Int             @id
+  channel_id                        Int?
+  type                              String?         @db.VarChar(20)
+  content                           String?
+  created_at                        DateTime?       @db.Timetz(6)
+  sender_uuid                       String?         @db.Uuid
+  reply_to                          String?         @db.Uuid
+  message_reads                     message_reads[]
+  channels                          channels?       @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_channel_id")
+  Users_messages_reply_toToUsers    Users?          @relation("messages_reply_toToUsers", fields: [reply_to], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_reply_to")
+  Users_messages_sender_uuidToUsers Users?          @relation("messages_sender_uuidToUsers", fields: [sender_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_sender_uuid")
+}
+
+model webhook_subscriptions {
+  id           Int       @id
+  channel_id   Int?
+  url          String?   @db.VarChar(255)
+  secret_token String?   @db.VarChar(255)
+  created_at   DateTime? @db.Timetz(6)
+  channels     channels? @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_web_hook_channel_id")
 }
 
 enum user_role {
