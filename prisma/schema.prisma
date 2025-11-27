@@ -85,35 +85,37 @@ model user_roles {
 }
 
 model message_reads {
-  id         Int       @id
-  message_id Int?
-  read_at    DateTime? @db.Timetz(6)
-  user_uuid  String?   @db.Uuid
-  messages   messages? @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_read_message_id")
-  Users      Users?    @relation(fields: [user_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_user_uuid")
+  id         Int       @id @default(autoincrement())
+  message_id Int
+  read_at    DateTime? @default(now()) @db.Timestamptz(6)
+  user_uuid  String    @db.Uuid
+  messages   messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_read_message_id")
+  Users      Users     @relation(fields: [user_uuid], references: [uuid], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_user_uuid")
+
+  @@unique([message_id, user_uuid], map: "uq_message_read_user")
 }
 
 model messages {
-  id                                Int             @id
-  channel_id                        Int?
-  type                              String?         @db.VarChar(20)
-  content                           String?
-  created_at                        DateTime?       @db.Timetz(6)
-  sender_uuid                       String?         @db.Uuid
+  id                                Int             @id @default(autoincrement())
+  channel_id                        Int
+  type                              String          @default("text") @db.VarChar(20)
+  content                           String          @db.Text
+  created_at                        DateTime        @default(now()) @db.Timestamptz(6)
+  sender_uuid                       String          @db.Uuid
   reply_to                          String?         @db.Uuid
   message_reads                     message_reads[]
-  channels                          channels?       @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_channel_id")
+  channels                          channels        @relation(fields: [channel_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ch_channel_id")
   Users_messages_reply_toToUsers    Users?          @relation("messages_reply_toToUsers", fields: [reply_to], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_reply_to")
-  Users_messages_sender_uuidToUsers Users?          @relation("messages_sender_uuidToUsers", fields: [sender_uuid], references: [uuid], onDelete: NoAction, onUpdate: NoAction, map: "fk_ch_sender_uuid")
+  Users_messages_sender_uuidToUsers Users           @relation("messages_sender_uuidToUsers", fields: [sender_uuid], references: [uuid], onDelete: Cascade, onUpdate: NoAction, map: "fk_ch_sender_uuid")
 }
 
 model webhook_subscriptions {
-  id           Int       @id
-  channel_id   Int?
-  url          String?   @db.VarChar(255)
-  secret_token String?   @db.VarChar(255)
-  created_at   DateTime? @db.Timetz(6)
-  channels     channels? @relation(fields: [channel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_web_hook_channel_id")
+  id           Int       @id @default(autoincrement())
+  channel_id   Int
+  url          String    @db.VarChar(255)
+  secret_token String    @db.VarChar(255)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  channels     channels  @relation(fields: [channel_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_web_hook_channel_id")
 }
 
 enum user_role {

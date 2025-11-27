@@ -158,10 +158,36 @@ export const getChannel = async (req: AuthenticatedRequest, res: Response) => {
             orderBy: { created_at: "desc" }
         });
 
+        const enriched = await Promise.all(
+            channels.map(async (channel) => {
+                const [lastMessage, unreadCount] = await Promise.all([
+                    prisma.messages.findFirst({
+                        where: { channel_id: channel.id },
+                        orderBy: { created_at: "desc" },
+                        select: { content: true, created_at: true },
+                    }),
+                    prisma.messages.count({
+                        where: {
+                            channel_id: channel.id,
+                            message_reads: { none: { user_uuid: userId } },
+                            NOT: { sender_uuid: userId },
+                        },
+                    }),
+                ]);
+
+                return {
+                    ...channel,
+                    last_message_content: lastMessage?.content ?? null,
+                    last_message_at: lastMessage?.created_at ?? null,
+                    unread_count: unreadCount,
+                };
+            })
+        );
+
         const duration = Date.now() - startTime;
         return res.status(200).json({
             message: "ดึงแชลแนลสำเร็จ",
-            data: channels,
+            data: enriched,
             duration: `${duration}ms`
         });
     } catch (error) {
