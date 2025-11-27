@@ -6,6 +6,7 @@ import channelRoutes from './Routes/ChannelRoutes';
 import messageRoutes from './Routes/MessageRoutes';
 import roleRoutes from './Routes/RoleRoutes';
 import userRoutes from './Routes/UserRoutes';
+import webhookRoutes from './Routes/WebhookRoutes';
 import { initRealtime } from './realtime';
 
 const app = express()
@@ -21,6 +22,7 @@ app.use('/api/v1/channel', channelRoutes)
 app.use('/api/v1/messages', messageRoutes)
 app.use('/api/v1/role', roleRoutes)
 app.use('/api/v1/users', userRoutes)
+app.use('/api/v1/webhooks', webhookRoutes)
 
 app.get('/', (req, res) => {
     res.send('hello world')

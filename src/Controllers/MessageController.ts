@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { PrismaClient } from "../generated/prisma/client";
 import { AuthenticatedRequest } from "../Middlewares/authMiddleware";
 import { broadcastToChannel } from "../realtime";
+import { postWebhooks } from "../services/webhookDispatcher";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -223,6 +224,16 @@ export const createMessage = async (req: AuthenticatedRequest, res: Response) =>
     broadcastToChannel(Number(channelId), {
       event: "message:new",
       data: mapped,
+    });
+    postWebhooks(Number(channelId), {
+      event: "message.new",
+      data: {
+        id: mapped.id,
+        channel_id: mapped.channel_id,
+        content: mapped.content,
+        sender_uuid: mapped.sender_uuid,
+        created_at: mapped.created_at,
+      },
     });
 
     const duration = Date.now() - startTime;
