@@ -68,9 +68,13 @@ export const createWebhook = async (req: AuthenticatedRequest, res: Response) =>
     if (channelIdNum == null || Number.isNaN(Number(channelIdNum))) {
       return res.status(400).json({ message: "channel_id ไม่ถูกต้อง" });
     }
-    if (!url || !secret_token) {
-      return res.status(400).json({ message: "กรุณาระบุ url และ secret_token" });
+    if (!secret_token) {
+      return res.status(400).json({ message: "กรุณาระบุ secret_token" });
     }
+    const normalizedUrl = (() => {
+      const u = (url ?? "").toString().trim();
+      return u.length === 0 ? "internal" : u;
+    })();
 
     const channel = await prisma.channels.findUnique({
       where: { id: Number(channelIdNum) },
@@ -84,7 +88,7 @@ export const createWebhook = async (req: AuthenticatedRequest, res: Response) =>
     const created = await prisma.webhook_subscriptions.create({
       data: {
         channel_id: Number(channelIdNum),
-        url: url.trim(),
+        url: normalizedUrl,
         secret_token: secret_token.trim(),
       },
       select: {
@@ -219,10 +223,7 @@ export const receiveNotification = async (req: Request, res: Response) => {
       });
     }
 
-    let finalMessage = String(content).trim();
-    if (title && title.trim().length > 0) {
-      finalMessage = `[แจ้งเตือน] ${title.trim()}\n${finalMessage}`;
-    }
+    const finalMessage = String(content).trim();
 
     const message = await prisma.messages.create({
       data: {
@@ -252,7 +253,10 @@ export const receiveNotification = async (req: Request, res: Response) => {
       type: message.type,
       content: message.content,
       sender_uuid: message.sender_uuid ?? "",
-      sender_name: message.Users_messages_sender_uuidToUsers?.display_name ?? "Notification",
+      sender_name:
+        title && title.trim().length > 0
+            ? title.trim()
+            : "Notification",
       created_at: message.created_at,
       read_by: message.message_reads.map((r) => r.user_uuid),
     };
