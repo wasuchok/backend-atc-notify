@@ -104,6 +104,11 @@ export const getChannelMessages = async (req: AuthenticatedRequest, res: Respons
     const userId = req.user?.uuid;
     const userRole = req.user?.role;
     const channelId = Number(req.params.channelId);
+    const limitParam = Number(req.query.limit);
+    const limit = Number.isNaN(limitParam) ? 30 : Math.min(Math.max(limitParam, 10), 100);
+    const cursorParam = req.query.cursor;
+    const cursorId =
+      typeof cursorParam === "string" ? Number(cursorParam) : cursorParam != null ? Number(cursorParam) : undefined;
 
     if (!userId) {
       const duration = Date.now() - startTime;
@@ -121,8 +126,12 @@ export const getChannelMessages = async (req: AuthenticatedRequest, res: Respons
     }
 
     const messages = await prisma.messages.findMany({
-      where: { channel_id: channelId },
-      orderBy: { created_at: "asc" },
+      where: {
+        channel_id: channelId,
+        ...(cursorId ? { id: { lt: cursorId } } : {}),
+      },
+      orderBy: { id: "desc" },
+      take: limit,
       select: {
         id: true,
         channel_id: true,
@@ -135,13 +144,18 @@ export const getChannelMessages = async (req: AuthenticatedRequest, res: Respons
       },
     });
 
-    const data = messages.map(mapMessage);
+    const dataDesc = messages.map(mapMessage);
+    const data = dataDesc.reverse();
+    const nextCursor = messages.length === limit ? messages[messages.length - 1].id : null;
+    const hasMore = nextCursor !== null;
+
     await markMessagesAsRead(channelId, userId);
 
     const duration = Date.now() - startTime;
     return res.status(200).json({
       message: "ดึงข้อความสำเร็จ",
       data,
+      meta: { nextCursor, hasMore },
       duration: `${duration}ms`,
     });
   } catch (error) {

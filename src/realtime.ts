@@ -9,8 +9,9 @@ type RealtimePayload = {
   data: unknown;
 };
 
-const channelBuckets = new Map<number, Set<WebSocket>>();
-const socketMeta = new WeakMap<WebSocket, { userId: string; channelId: number }>();
+const GLOBAL_BUCKET = "global";
+const channelBuckets = new Map<string, Set<WebSocket>>();
+const socketMeta = new WeakMap<WebSocket, { userId: string; channelKey: string }>();
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
@@ -27,8 +28,10 @@ export const initRealtime = (server: Server) => {
     const token = query.get("token");
     const channelIdParam = query.get("channelId");
     const channelId = channelIdParam ? Number(channelIdParam) : NaN;
+    const isGlobal = !channelIdParam || Number.isNaN(channelId) || channelId <= 0;
+    const channelKey = isGlobal ? GLOBAL_BUCKET : bucketKey(channelId);
 
-    if (!token || Number.isNaN(channelId)) {
+    if (!token) {
       socket.close(4001, "token หรือ channelId ไม่ถูกต้อง");
       return;
     }
@@ -39,21 +42,27 @@ export const initRealtime = (server: Server) => {
       return;
     }
 
-    socketMeta.set(socket, { userId, channelId });
-    addSocketToChannel(channelId, socket);
+    socketMeta.set(socket, { userId, channelKey });
+    addSocketToBucket(channelKey, socket);
 
     safeSend(socket, {
       event: "connected",
-      data: { channelId, userId },
+      data: { channelId: isGlobal ? null : channelId, userId },
     });
 
-    socket.on("close", () => removeSocket(channelId, socket));
-    socket.on("error", () => removeSocket(channelId, socket));
+    socket.on("close", () => removeSocket(channelKey, socket));
+    socket.on("error", () => removeSocket(channelKey, socket));
   });
 };
 
 export const broadcastToChannel = (channelId: number, payload: RealtimePayload) => {
-  const listeners = channelBuckets.get(channelId);
+  const channelKey = bucketKey(channelId);
+  broadcastToBucket(channelKey, payload);
+  broadcastToBucket(GLOBAL_BUCKET, payload);
+};
+
+const broadcastToBucket = (key: string, payload: RealtimePayload) => {
+  const listeners = channelBuckets.get(key);
   if (!listeners || listeners.size === 0) return;
 
   const data = JSON.stringify(payload);
@@ -64,6 +73,8 @@ export const broadcastToChannel = (channelId: number, payload: RealtimePayload) 
   });
 };
 
+const bucketKey = (channelId: number) => `channel-${channelId}`;
+
 const parseUserId = (token: string): string | null => {
   try {
     const payload = jwt.verify(token, jwtSecret) as jwt.JwtPayload;
@@ -73,18 +84,18 @@ const parseUserId = (token: string): string | null => {
   }
 };
 
-const addSocketToChannel = (channelId: number, socket: WebSocket) => {
-  const set = channelBuckets.get(channelId) ?? new Set<WebSocket>();
+const addSocketToBucket = (channelKey: string, socket: WebSocket) => {
+  const set = channelBuckets.get(channelKey) ?? new Set<WebSocket>();
   set.add(socket);
-  channelBuckets.set(channelId, set);
+  channelBuckets.set(channelKey, set);
 };
 
-const removeSocket = (channelId: number, socket: WebSocket) => {
-  const set = channelBuckets.get(channelId);
+const removeSocket = (channelKey: string, socket: WebSocket) => {
+  const set = channelBuckets.get(channelKey);
   if (set) {
     set.delete(socket);
     if (set.size === 0) {
-      channelBuckets.delete(channelId);
+      channelBuckets.delete(channelKey);
     }
   }
   socketMeta.delete(socket);
