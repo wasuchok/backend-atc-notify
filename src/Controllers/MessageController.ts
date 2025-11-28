@@ -138,6 +138,7 @@ export const getChannelMessages = async (req: AuthenticatedRequest, res: Respons
         id: true,
         channel_id: true,
         type: true,
+        image_url: true,
         content: true,
         created_at: true,
         sender_uuid: true,
