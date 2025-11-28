@@ -61,14 +61,14 @@ export const handleImageUpload = async (
       });
     }
 
-    // สร้าง URL สำหรับเข้าถึงรูปภาพ
+    // เก็บแค่ relative path เพื่อให้ยืดหยุ่น
     const imageUrl = `/uploads/images/${req.file.filename}`;
 
     const duration = Date.now() - startTime;
     return res.status(200).json({
       message: "อัปโหลดรูปภาพสำเร็จ",
       data: {
-        url: imageUrl,
+        url: imageUrl, // เก็บแค่ relative path
         filename: req.file.filename,
         size: req.file.size,
       },
