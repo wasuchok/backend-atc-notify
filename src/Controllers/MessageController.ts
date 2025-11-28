@@ -20,6 +20,7 @@ const mapMessage = (message: any) => ({
   channel_id: message.channel_id,
   type: message.type,
   content: message.content,
+  image_url: message.image_url || null,
   sender_uuid: message.sender_uuid,
   sender_name: message.Users_messages_sender_uuidToUsers?.display_name ?? "ไม่ระบุ",
   created_at: message.created_at,
@@ -174,10 +175,11 @@ export const createMessage = async (req: AuthenticatedRequest, res: Response) =>
   try {
     const userId = req.user?.uuid;
     const userRole = req.user?.role;
-    const { channel_id, content, type } = req.body as {
+    const { channel_id, content, type, image_url } = req.body as {
       channel_id?: number | string;
       content?: string;
       type?: string;
+      image_url?: string;
     };
 
     const channelId = typeof channel_id === "string" ? Number(channel_id) : channel_id;
@@ -189,9 +191,16 @@ export const createMessage = async (req: AuthenticatedRequest, res: Response) =>
       const duration = Date.now() - startTime;
       return res.status(400).json({ message: "channel_id ไม่ถูกต้อง", duration: `${duration}ms` });
     }
-    if (!content || !String(content).trim()) {
+    // ต้องมี content หรือ image_url อย่างใดอย่างหนึ่ง
+    if ((!content || !String(content).trim()) && !image_url) {
       const duration = Date.now() - startTime;
-      return res.status(400).json({ message: "กรุณาระบุข้อความ", duration: `${duration}ms` });
+      return res.status(400).json({ message: "กรุณาระบุข้อความหรือรูปภาพ", duration: `${duration}ms` });
+    }
+
+    // ตรวจสอบว่า image_url เป็น URL ที่ถูกต้อง (ไม่ใช่ base64)
+    if (image_url && image_url.startsWith('data:')) {
+      const duration = Date.now() - startTime;
+      return res.status(400).json({ message: "กรุณาอัปโหลดรูปภาพผ่าน API upload-image", duration: `${duration}ms` });
     }
 
     const access = await ensureChannelAccess(Number(channelId), userId, userRole);
@@ -203,8 +212,9 @@ export const createMessage = async (req: AuthenticatedRequest, res: Response) =>
     const message = await prisma.messages.create({
       data: {
         channel_id: Number(channelId),
-        type: type || "text",
-        content: String(content).trim(),
+        type: image_url ? "image" : (type || "text"),
+        content: content ? String(content).trim() : "",
+        image_url: image_url || null,
         sender_uuid: userId,
         message_reads: { create: [{ user_uuid: userId, read_at: new Date() }] },
       },
@@ -213,6 +223,7 @@ export const createMessage = async (req: AuthenticatedRequest, res: Response) =>
         channel_id: true,
         type: true,
         content: true,
+        image_url: true,
         created_at: true,
         sender_uuid: true,
         Users_messages_sender_uuidToUsers: { select: { display_name: true } },

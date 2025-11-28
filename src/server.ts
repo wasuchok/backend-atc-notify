@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express from "express";
 import http from "http";
+import bodyParser from 'body-parser';
+import path from "path";
 import authRoutes from "./Routes/AuthRoutes";
 import channelRoutes from './Routes/ChannelRoutes';
 import messageRoutes from './Routes/MessageRoutes';
@@ -12,8 +14,13 @@ import { initRealtime } from './realtime';
 const app = express()
 const server = http.createServer(app);
 
-app.use(express.json());
+// ใช้ body-parser โดยตรงเพื่อรองรับ large payload (50MB)
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors())
+
+// Serve static files สำหรับรูปภาพ
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 const port = 3300
 
