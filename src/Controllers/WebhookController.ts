@@ -1,7 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Request, Response } from "express";
-import { Pool } from "pg";
 import "dotenv/config";
+import { Request, Response } from "express";
+import fs from "fs";
+import multer from "multer";
+import path from "path";
+import { Pool } from "pg";
 import { PrismaClient } from "../generated/prisma/client";
 import { AuthenticatedRequest } from "../Middlewares/authMiddleware";
 import { broadcastToChannel } from "../realtime";
@@ -14,6 +17,37 @@ if (!databaseUrl) {
 const prisma = new PrismaClient({
   adapter: new PrismaPg(new Pool({ connectionString: databaseUrl })),
 });
+
+const webhookImagesDir = path.join(process.cwd(), "uploads", "images");
+if (!fs.existsSync(webhookImagesDir)) {
+  fs.mkdirSync(webhookImagesDir, { recursive: true });
+}
+
+const webhookStorage = multer.diskStorage({
+  destination: (_, __, cb) => cb(null, webhookImagesDir),
+  filename: (_, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const ext = path.extname(file.originalname);
+    cb(null, `${uniqueSuffix}${ext}`);
+  },
+});
+
+const webhookUpload = multer({
+  storage: webhookStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp/;
+    const extMatch = allowed.test(path.extname(file.originalname).toLowerCase());
+    const typeMatch = allowed.test(file.mimetype);
+    if (extMatch && typeMatch) {
+      cb(null, true);
+    } else {
+      cb(new Error("อนุญาตเฉพาะไฟล์รูปภาพ (jpeg, jpg, png, gif, webp)"));
+    }
+  },
+});
+
+export const webhookImageUpload = webhookUpload.single("image");
 
 export const listWebhooks = async (req: AuthenticatedRequest, res: Response) => {
   const start = Date.now();
@@ -111,22 +145,29 @@ export const createWebhook = async (req: AuthenticatedRequest, res: Response) =>
 export const receiveWebhook = async (req: Request, res: Response) => {
   const start = Date.now();
   try {
-    const { channel_id, content, sender_uuid } = req.body as {
+    const payload = (req.body ?? {}) as {
       channel_id?: number | string;
       content?: string;
       sender_uuid?: string;
+      image_url?: string;
+      secret_token?: string;
     };
+    const { channel_id, content, sender_uuid, image_url } = payload;
     const secret =
       (req.headers["x-webhook-secret"] as string | undefined) ??
-      (req.body?.secret_token as string | undefined);
-
+      payload.secret_token;
+    const uploadedFile = req.file as any
+    const fileImageUrl = uploadedFile ? `/uploads/images/${uploadedFile.filename}` : undefined;
+    const finalContent = typeof content === "string" ? content.trim() : "";
+    const trimmedImageUrl = typeof image_url === "string" ? image_url.trim() : undefined;
+    const finalImageUrl = fileImageUrl ?? trimmedImageUrl;
     const channelIdNum = typeof channel_id === "string" ? Number(channel_id) : channel_id;
     if (channelIdNum == null || Number.isNaN(Number(channelIdNum))) {
       return res.status(400).json({ message: "channel_id ไม่ถูกต้อง" });
     }
     if (!secret) return res.status(401).json({ message: "ไม่พบ secret token" });
-    if (!content || !String(content).trim()) {
-      return res.status(400).json({ message: "กรุณาระบุ content" });
+    if ((!finalContent || finalContent.length === 0) && !finalImageUrl) {
+      return res.status(400).json({ message: "กรุณาระบุ content หรือ image_url" });
     }
 
     const webhook = await prisma.webhook_subscriptions.findFirst({
@@ -146,15 +187,17 @@ export const receiveWebhook = async (req: Request, res: Response) => {
     const message = await prisma.messages.create({
       data: {
         channel_id: Number(channelIdNum),
-        type: "webhook",
-        content: String(content).trim(),
+        type: finalImageUrl ? "image" : "webhook",
+        content: finalContent,
         sender_uuid: sender,
+        image_url: finalImageUrl || null,
       },
       select: {
         id: true,
         channel_id: true,
         type: true,
         content: true,
+        image_url: true,
         created_at: true,
         sender_uuid: true,
         Users_messages_sender_uuidToUsers: { select: { display_name: true } },
@@ -167,6 +210,7 @@ export const receiveWebhook = async (req: Request, res: Response) => {
       channel_id: message.channel_id,
       type: message.type,
       content: message.content,
+      image_url: message.image_url,
       sender_uuid: message.sender_uuid ?? "",
       sender_name: message.Users_messages_sender_uuidToUsers?.display_name ?? "Webhook",
       created_at: message.created_at,
@@ -255,8 +299,8 @@ export const receiveNotification = async (req: Request, res: Response) => {
       sender_uuid: message.sender_uuid ?? "",
       sender_name:
         title && title.trim().length > 0
-            ? title.trim()
-            : "Notification",
+          ? title.trim()
+          : "Notification",
       created_at: message.created_at,
       read_by: message.message_reads.map((r) => r.user_uuid),
     };
