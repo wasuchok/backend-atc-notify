@@ -344,3 +344,70 @@ export const updateChannelRoles = async (req: AuthenticatedRequest, res: Respons
         });
     }
 };
+
+export const deleteChannel = async (req: AuthenticatedRequest, res: Response) => {
+    const startTime = Date.now();
+    try {
+        const userId = req.user?.uuid;
+        const userRole = (req.user?.role || "").toLowerCase();
+        const channelId = Number(req.params.id);
+
+        if (!userId) {
+            const duration = Date.now() - startTime;
+            return res.status(401).json({
+                message: "กรุณาเข้าสู่ระบบ",
+                duration: `${duration}ms`
+            });
+        }
+
+        if (Number.isNaN(channelId)) {
+            const duration = Date.now() - startTime;
+            return res.status(400).json({
+                message: "channel_id ไม่ถูกต้อง",
+                duration: `${duration}ms`
+            });
+        }
+
+        // ตรวจสอบว่าเป็น admin เท่านั้น
+        if (userRole !== "admin") {
+            const duration = Date.now() - startTime;
+            return res.status(403).json({
+                message: "ไม่มีสิทธิ์ลบแชลแนล (ต้องเป็น admin)",
+                duration: `${duration}ms`
+            });
+        }
+
+        // ตรวจสอบว่าแชลแนลมีอยู่จริง
+        const channel = await prisma.channels.findUnique({
+            where: { id: channelId },
+            select: { id: true, name: true },
+        });
+
+        if (!channel) {
+            const duration = Date.now() - startTime;
+            return res.status(404).json({
+                message: "ไม่พบแชลแนล",
+                duration: `${duration}ms`
+            });
+        }
+
+        // ลบแชลแนล (cascade จะลบ messages, webhooks, และ channel_role_visibility อัตโนมัติ)
+        await prisma.channels.delete({
+            where: { id: channelId },
+        });
+
+        const duration = Date.now() - startTime;
+        return res.status(200).json({
+            message: "ลบแชลแนลสำเร็จ",
+            data: { id: channelId, name: channel.name },
+            duration: `${duration}ms`
+        });
+    } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error("Delete channel error:", error);
+        return res.status(500).json({
+            message: "เกิดข้อผิดพลาดในการลบแชลแนล",
+            duration: `${duration}ms`,
+        });
+    }
+};
